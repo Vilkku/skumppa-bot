@@ -1,6 +1,7 @@
 # skumppa-bot
 
-**Skumppa:** *From Swedish skumvin ‎(“sparkling wine”).* [[1](https://en.wiktionary.org/wiki/skumppa)]
+**Skumppa:**
+> From Swedish *skumvin*‎ (“sparkling wine”). [[1](https://en.wiktionary.org/wiki/skumppa)]
 
 They are serving up some of that sweet skumppa, but you missed it again? Never again! Invite skumppa-bot to your Slack channels and get notified whenever someone as much as whispers the word.
 
