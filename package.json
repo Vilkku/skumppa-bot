@@ -1,0 +1,7 @@
+{
+    "name": "skumppa-bot",
+    "main": "index.js",
+    "dependencies": {
+        "slack-client": "~1.4.0"
+    }
+}
