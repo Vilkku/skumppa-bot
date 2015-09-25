@@ -1,11 +1,14 @@
 var Slack = require('slack-client');
-var token = '';
+var changeCase = require('change-case');
+var config = require('./config.json');
+
+var token = config.token;
 var autoReconnect = true;
 var autoMark = true;
 
 var slack = new Slack(token, autoReconnect, autoMark);
 
-var skumppaChannel;
+var announceChannel;
 
 slack.on('open', function() {
     var channel, channels, group, groups, id, messages, unreads;
@@ -22,8 +25,8 @@ slack.on('open', function() {
             if (channel.is_member) {
                 results.push("#" + channel.name);
             }
-            if (channel.name == "random") {
-                skumppaChannel = channel;
+            if (channel.name == config.announceChannel) {
+                announceChannel = channel;
             }
         }
         return results;
@@ -57,14 +60,17 @@ slack.on('message', function(message) {
     type = message.type, ts = message.ts, text = message.text;
     channelName = (channel != null ? channel.is_channel : void 0) ? '#' : '';
     channelName = channelName + (channel ? channel.name : 'UNKNOWN_CHANNEL');
-    userName = (user != null ? user.name : "UNKNOWN_USER");
+    userName = (user != null ? user.real_name : "UNKNOWN_USER");
 
     if (type === 'message' && (text != null) && (channel != null)) {
-        if (text.indexOf("skumppa") > -1) {
-            response = "<!channel> Skumppa mainittu kanavassa <#" + channel.id + ">! " + userName + ": \"" + text + "\"";
-            skumppaChannel.send(response);
-            console.log("Received: " + type + " " + channelName + " " + userName + " " + ts + " \"" + text + "\"");
-        }
+        config.keywords.forEach(function(keyword){
+            if (changeCase.lowerCase(text).indexOf(changeCase.lowerCase(keyword)) > -1
+                && text.indexOf("has joined the channel") < 0) {
+                response = "<!channel> " + changeCase.upperCaseFirst(keyword) + " mainittu kanavassa <#" + channel.id + ">! " + userName + ": \"" + text + "\"";
+                announceChannel.send(response);
+                console.log("Received " + type + " in " + channelName + " from " + userName + " at " + ts + " on keyword \"" + keyword + "\": \"" + text + "\"");
+            }
+        });
     } else {
         typeError = type !== 'message' ? "unexpected type " + type + "." : null;
         textError = text == null ? 'text was undefined.' : null;
