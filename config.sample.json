@@ -1,5 +1,6 @@
 {
     "token": "",
     "announceChannel": "random",
-    "keywords": ["skumppa", "party"]
+    "keywords": ["skumppa", "party"],
+    "response": "<!channel> {keywordUcfirst} mentioned! {archiveUrl}"
 }

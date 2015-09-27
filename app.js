@@ -1,5 +1,6 @@
 var Slack = require('slack-client');
 var changeCase = require('change-case');
+var format = require("string-template");
 var config = require('./config.json');
 
 var token = config.token;
@@ -53,29 +54,68 @@ slack.on('open', function() {
 });
 
 slack.on('message', function(message) {
-    var channel, channels, channelError, channelName, errors, response, text, textError, ts, type, typeError, user, userName;
-    channel = slack.getChannelGroupOrDMByID(message.channel);
-    user = slack.getUserByID(message.user);
-    response = '';
-    type = message.type, ts = message.ts, text = message.text;
-    channelName = (channel != null ? channel.is_channel : void 0) ? '#' : '';
-    channelName = channelName + (channel ? channel.name : 'UNKNOWN_CHANNEL');
-    userName = (user != null ? user.real_name : "UNKNOWN_USER");
+    // All code is based on compiling the node-slack-client coffeescript example and using the resulting javascript as
+    // base. All events contain a bit of strange code because of this, but message is affected the most as it is the one
+    // most modified.
+    var channel = slack.getChannelGroupOrDMByID(message.channel);
+    var user = slack.getUserByID(message.user);
+    var response = config.response;
+    var subtype = message.subtype;
+    var type = message.type
+    var ts = message.ts
+    var text = message.text;
+    var userName = (user != null ? user.real_name : message.username);
 
-    if (type === 'message' && (text != null) && (channel != null)) {
-        config.keywords.forEach(function(keyword){
-            if (changeCase.lowerCase(text).indexOf(changeCase.lowerCase(keyword)) > -1
-                && text.indexOf("has joined the channel") < 0) {
-                response = "<!channel> " + changeCase.upperCaseFirst(keyword) + " mainittu kanavassa <#" + channel.id + ">! " + userName + ": \"" + text + "\"";
+    var channelName = (channel != null ? channel.is_channel : void 0) ? '#' : '';
+    channelName = channelName + (channel ? channel.name : 'UNKNOWN_CHANNEL');
+
+    // By trial and error this seems to be the archive URL of Slack messages. When included in a message Slack formats
+    // it nicely.
+    var archiveUrl = "https://" + slack.team.domain + ".slack.com/archives/" + channel.name + "/p" +
+                        ts.split('.').join("");
+
+    if (message.hidden) {
+        return;
+    }
+
+    if (
+        (type === 'message')
+        && (text != null)
+        && (channel != null)
+        && (subtype != "channel_join")
+        && (subtype != "channel_leave")
+    ) {
+        var keyword;
+        // Using for instead of forEach() so that we can break the loop by returning. Prevents multiple announcements if
+        // there are more than one keyword in a message.
+        for (i = 0; i < config.keywords.length; i++) {
+            keyword = config.keywords[i];
+            if (changeCase.lowerCase(text).indexOf(changeCase.lowerCase(keyword)) > -1) {
+                // Could include a bunch more of these, but currently only the ones I personally need or have needed are
+                // listed. Might be a good idea to add some validation for some of these. Pull requests welcome!
+                response = format(response, {
+                    archiveUrl: archiveUrl,
+                    channelId: channel.id,
+                    channelName: channelName,
+                    keyword: keyword,
+                    keywordUcfirst: changeCase.upperCaseFirst(keyword),
+                    messageText: text,
+                    realName: userName
+                });
+
                 announceChannel.send(response);
-                console.log("Received " + type + " in " + channelName + " from " + userName + " at " + ts + " on keyword \"" + keyword + "\": \"" + text + "\"");
+                return console.log("Received " + type + " in " + channelName + " from " + userName + " at " + ts +
+                                    " on keyword \"" + keyword + "\": \"" + text + "\"");
             }
-        });
+        }
     } else {
-        typeError = type !== 'message' ? "unexpected type " + type + "." : null;
-        textError = text == null ? 'text was undefined.' : null;
-        channelError = channel == null ? 'channel was undefined.' : null;
-        errors = [typeError, textError, channelError].filter(function(element) {
+        console.log(message);
+        var typeError = type !== 'message' ? "unexpected type " + type + "." : null;
+        var textError = text == null ? 'text was undefined.' : null;
+        var channelError = channel == null ? 'channel was undefined.' : null;
+        var joinError = subtype == "channel_join" ? 'channel join message.' : null;
+        var leaveError = subtype == "channel_leave" ? 'channel leave message.' : null;
+        var errors = [typeError, textError, channelError, joinError, leaveError].filter(function(element) {
             return element !== null;
         }).join(' ');
         return console.log("@" + slack.self.name + " could not respond. " + errors);
