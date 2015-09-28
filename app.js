@@ -11,6 +11,10 @@ var slack = new Slack(token, autoReconnect, autoMark);
 
 var announceChannel;
 
+if (typeof config.ignoreSelf === "undefined") {
+    config.ignoreSelf = false;
+}
+
 slack.on('open', function() {
     var channel, channels, group, groups, id, messages, unreads;
     channels = [];
@@ -25,9 +29,6 @@ slack.on('open', function() {
             channel = ref[id];
             if (channel.is_member) {
                 results.push("#" + channel.name);
-            }
-            if (channel.name == config.announceChannel) {
-                announceChannel = channel;
             }
         }
         return results;
@@ -45,6 +46,8 @@ slack.on('open', function() {
         }
         return results;
     })();
+
+    announceChannel = slack.getChannelByName(config.announceChannel);
 
     console.log("Welcome to Slack. You are @" + slack.self.name + " of " + slack.team.name);
     console.log('You are in: ' + channels.join(', '));
@@ -84,6 +87,7 @@ slack.on('message', function(message) {
         && (channel != null)
         && (subtype != "channel_join")
         && (subtype != "channel_leave")
+        && (channel.id != announceChannel.id)
     ) {
         var keyword;
         // Using for instead of forEach() so that we can break the loop by returning. Prevents multiple announcements if
@@ -91,25 +95,36 @@ slack.on('message', function(message) {
         for (i = 0; i < config.keywords.length; i++) {
             keyword = config.keywords[i];
             if (changeCase.lowerCase(text).indexOf(changeCase.lowerCase(keyword)) > -1) {
-                // Could include a bunch more of these, but currently only the ones I personally need or have needed are
-                // listed. Might be a good idea to add some validation for some of these. Pull requests welcome!
-                response = format(response, {
-                    archiveUrl: archiveUrl,
-                    channelId: channel.id,
-                    channelName: channelName,
-                    keyword: keyword,
-                    keywordUcfirst: changeCase.upperCaseFirst(keyword),
-                    messageText: text,
-                    realName: userName
-                });
+                // Check if the bot name contains the keyword and if the message contains the bot name. If both of these
+                // conditions are true it seems like the bot triggered on the bot name, which is a behavior that is mostly
+                // unwanted.
+                if (
+                    (config.ignoreSelf)
+                    && (changeCase.lowerCase(slack.self.name).indexOf(changeCase.lowerCase(keyword)) > -1)
+                    && (changeCase.lowerCase(text).indexOf(changeCase.lowerCase(slack.self.name)) > -1)
+                ) {
+                    console.log("Received " + type + " in " + channelName + " from " + userName + " at " + ts +
+                        " on keyword \"" + keyword + "\", triggered on bot name, didn't respond: \"" + text + "\"");
+                } else {
+                    // Could include a bunch more of these, but currently only the ones I personally need or have needed are
+                    // listed. Might be a good idea to add some validation for some of these. Pull requests welcome!
+                    response = format(response, {
+                        archiveUrl: archiveUrl,
+                        channelId: channel.id,
+                        channelName: channelName,
+                        keyword: keyword,
+                        keywordUcfirst: changeCase.upperCaseFirst(keyword),
+                        messageText: text,
+                        realName: userName
+                    });
 
-                announceChannel.send(response);
-                return console.log("Received " + type + " in " + channelName + " from " + userName + " at " + ts +
-                                    " on keyword \"" + keyword + "\": \"" + text + "\"");
+                    announceChannel.send(response);
+                    return console.log("Received " + type + " in " + channelName + " from " + userName + " at " + ts +
+                                        " on keyword \"" + keyword + "\": \"" + text + "\"");
+                }
             }
         }
     } else {
-        console.log(message);
         var typeError = type !== 'message' ? "unexpected type " + type + "." : null;
         var textError = text == null ? 'text was undefined.' : null;
         var channelError = channel == null ? 'channel was undefined.' : null;
