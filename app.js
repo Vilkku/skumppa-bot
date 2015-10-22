@@ -1,18 +1,22 @@
 var Slack = require('slack-client');
+
 var changeCase = require('change-case');
-var format = require("string-template");
 var config = require('./config.json');
+var format = require('string-template');
 
-var token = config.token;
-var autoReconnect = true;
-var autoMark = true;
-
-var slack = new Slack(token, autoReconnect, autoMark);
+var slack = new Slack(config.token, true, true);
 
 var announceChannel;
 
 if (typeof config.ignoreSelf === "undefined") {
     config.ignoreSelf = false;
+}
+
+if (typeof config.jira !== "undefined") {
+    var Jira = require('jira').JiraApi;
+    var jira = new Jira(config.jira.protocol, config.jira.host, config.jira.port, config.jira.user, config.jira.password, '2');
+} else {
+    var jira = false;
 }
 
 slack.on('open', function() {
@@ -89,38 +93,61 @@ slack.on('message', function(message) {
         && (subtype != "channel_leave")
         && (channel.id != announceChannel.id)
     ) {
-        var keyword;
-        // Using for instead of forEach() so that we can break the loop by returning. Prevents multiple announcements if
-        // there are more than one keyword in a message.
-        for (i = 0; i < config.keywords.length; i++) {
-            keyword = config.keywords[i];
-            if (changeCase.lowerCase(text).indexOf(changeCase.lowerCase(keyword)) > -1) {
-                // Check if the bot name contains the keyword and if the message contains the bot name. If both of these
-                // conditions are true it seems like the bot triggered on the bot name, which is a behavior that is mostly
-                // unwanted.
-                if (
-                    (config.ignoreSelf)
-                    && (changeCase.lowerCase(slack.self.name).indexOf(changeCase.lowerCase(keyword)) > -1)
-                    && (changeCase.lowerCase(text).indexOf(changeCase.lowerCase(slack.self.name)) > -1)
-                ) {
-                    console.log("Received " + type + " in " + channelName + " from " + userName + " at " + ts +
-                        " on keyword \"" + keyword + "\", triggered on bot name, didn't respond: \"" + text + "\"");
-                } else {
-                    // Could include a bunch more of these, but currently only the ones I personally need or have needed are
-                    // listed. Might be a good idea to add some validation for some of these. Pull requests welcome!
-                    response = format(response, {
-                        archiveUrl: archiveUrl,
-                        channelId: channel.id,
-                        channelName: channelName,
-                        keyword: keyword,
-                        keywordUcfirst: changeCase.upperCaseFirst(keyword),
-                        messageText: text,
-                        realName: userName
-                    });
+        if (jira) {
+            // http://stackoverflow.com/a/6969486
+            // https:\/\/lyytidev\.atlassian\.net\/browse\/([A-Za-z0-9-]+)
+            var re = new RegExp(config.jira.protocol + ":\/\/" + config.jira.host.replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, "\\$&") + "\/browse\/([A-Za-z0-9-]+)", "g");
+            var match = re.exec(text);
+            var matches = [];
+            while (match != null) {
+                if (matches.indexOf(match[1]) === -1) {
+                    matches.push(match[1]);
+                }
+                match = re.exec(text);
+            }
 
-                    announceChannel.send(response);
-                    return console.log("Received " + type + " in " + channelName + " from " + userName + " at " + ts +
-                                        " on keyword \"" + keyword + "\": \"" + text + "\"");
+            matches.forEach(function(value){
+                jira.findIssue(value, function(error, issue) {
+                    if (!error) {
+                        channel.send('[' + issue.key + '] ' + issue.fields.summary);
+                    }
+                });
+            });
+        }
+        if (channel.id != announceChannel.id) {
+            var keyword;
+            // Using for instead of forEach() so that we can break the loop by returning. Prevents multiple announcements if
+            // there are more than one keyword in a message.
+            for (i = 0; i < config.keywords.length; i++) {
+                keyword = config.keywords[i];
+                if (changeCase.lowerCase(text).indexOf(changeCase.lowerCase(keyword)) > -1) {
+                    // Check if the bot name contains the keyword and if the message contains the bot name. If both of these
+                    // conditions are true it seems like the bot triggered on the bot name, which is a behavior that is mostly
+                    // unwanted.
+                    if (
+                        (config.ignoreSelf)
+                        && (changeCase.lowerCase(slack.self.name).indexOf(changeCase.lowerCase(keyword)) > -1)
+                        && (changeCase.lowerCase(text).indexOf(changeCase.lowerCase(slack.self.name)) > -1)
+                    ) {
+                        console.log("Received " + type + " in " + channelName + " from " + userName + " at " + ts +
+                            " on keyword \"" + keyword + "\", triggered on bot name, didn't respond: \"" + text + "\"");
+                    } else {
+                        // Could include a bunch more of these, but currently only the ones I personally need or have needed are
+                        // listed. Might be a good idea to add some validation for some of these. Pull requests welcome!
+                        response = format(response, {
+                            archiveUrl: archiveUrl,
+                            channelId: channel.id,
+                            channelName: channelName,
+                            keyword: keyword,
+                            keywordUcfirst: changeCase.upperCaseFirst(keyword),
+                            messageText: text,
+                            realName: userName
+                        });
+
+                        announceChannel.send(response);
+                        return console.log("Received " + type + " in " + channelName + " from " + userName + " at " + ts +
+                                            " on keyword \"" + keyword + "\": \"" + text + "\"");
+                    }
                 }
             }
         }
