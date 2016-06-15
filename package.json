@@ -2,10 +2,10 @@
   "name": "skumppa-bot",
   "main": "app.js",
   "dependencies": {
-    "change-case": "2.3.x",
+    "@slack/client": "^3.5.0",
+    "change-case": "^3.0.0",
     "jira": "^0.9.2",
-    "slack-client": "1.4.x",
-    "string-template": "0.2.x"
+    "string-template": "^1.0.0"
   },
   "repository": {
     "type": "git",
