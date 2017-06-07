@@ -39,6 +39,9 @@ Array of strings. The words skumppa-bot will trigger on.
 #### ignoreSelf
 Boolean. If true the bot will not react to messages when the name of the bot contains the keyword and the message contains the bot's name.
 
+#### ignoreBots
+Boolean. If true the bot will not react to messages from bots (bot users or Slackbot).
+
 #### response
 String. The message skumppa-bot will respond with. Template words can be written within {braces}. See [the message formatting documentation](https://api.slack.com/docs/formatting) for details on how Slack creates clickable links for channels and users. There are probably many useful template words missing, suggestions are welcome.
 
