@@ -3,5 +3,6 @@
     "announceChannel": "random",
     "keywords": ["skumppa", "party"],
     "response": "<!channel> {keywordUcfirst} mentioned! {archiveUrl}",
-    "ignoreSelf": true
+    "ignoreSelf": true,
+    "ignoreBots": true
 }

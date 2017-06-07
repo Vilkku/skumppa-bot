@@ -54,6 +54,10 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage (message) {
         return;
     }
 
+    if (config.ignoreBots && (user.is_bot || user.id === 'USLACKBOT')) {
+        return;
+    }
+
     if (
         type === 'message' && text != null && channel != null &&
         subtype !== 'channel_join' && subtype !== 'channel_leave' && channel.id !== announceChannel.id
@@ -74,7 +78,25 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage (message) {
             matches.forEach(function (value) {
                 jira.findIssue(value, function (error, issue) {
                     if (!error) {
-                        rtm.sendMessage('[' + issue.key + '] ' + issue.fields.summary, message.channel);
+                        // Need to use send instead of sendMessage to include the thread_ts value, that uses a message
+                        // object instead of just the message text
+                        // The ID is always 1, but it doesn't seem to matter as we don't use it anywhere at the moment
+                        var reply = {
+                            id: 1,
+                            type: 'message',
+                            channel: message.channel,
+                            text: '[' + issue.key + '] ' + issue.fields.summary
+                        };
+
+                        if (message.thread_ts) {
+                            // if already in a thread
+                            reply.thread_ts = message.thread_ts;
+                        } else if (message.ts) {
+                            // if not in a thread
+                            reply.thread_ts = message.ts;
+                        }
+
+                        rtm.send(reply);
                     }
                 });
             });
@@ -126,6 +148,11 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage (message) {
         var errors = [typeError, textError, channelError, joinError, leaveError].filter(function (element) {
             return element !== null;
         }).join(' ');
-        return console.log('@' + selfUser.name + ' could not respond. ' + errors);
+
+        if (errors) {
+            return console.log('@' + selfUser.name + ' could not respond. ' + errors);
+        }
+
+        return;
     }
 });
