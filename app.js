@@ -54,7 +54,7 @@ rtm.on(RTM_EVENTS.MESSAGE, function handleRtmMessage (message) {
         return;
     }
 
-    if (config.ignoreBots && (user.is_bot || user.id === 'USLACKBOT')) {
+    if (config.ignoreBots && user && (user.is_bot || (user.id && user.id === 'USLACKBOT'))) {
         return;
     }
 
